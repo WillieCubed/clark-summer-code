@@ -12,7 +12,7 @@ upcoming project repository.
 
 ## How to Run
 ### Prerequisites
-This repository requires Python 3.5 or later.
+This repository requires Python 3.6 or later.
 
 ### Installing dependencies
 
@@ -24,7 +24,10 @@ pip install -U requirements.txt
 ```
 
 ## Table of Contents
+ - `gradient_descent.py` includes a simple gradient descent implementation
+    with a provided function.
  - `perceptron.py` contains a perceptron algorithm implementation.
+ - `common.py` contains utility functions for the whole repository.
  
 
 ## License
