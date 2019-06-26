@@ -45,7 +45,7 @@ def split_data(data: np.ndarray, amounts: tuple = None) -> (
     train_percent, validation_percent, test_percent = amounts
     validation_lower_bound = int(total_length * train_percent)
     test_lower_bound = validation_lower_bound + int(
-        total_length * validation_lower_bound)
+        total_length * validation_percent)
     training = {
         'x': features[:validation_lower_bound],
         'y': labels[:validation_lower_bound]
