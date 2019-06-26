@@ -27,14 +27,13 @@ def split_data(data: np.ndarray, amounts: tuple = None) -> (
     """Split a dataset into a training, validation, and test dataset.
 
     Args:
-        data (np.ndarray): An array containing rows for each data point and columns for each feature. The last column must be the label.
+        data (np.ndarray): An array containing rows for each data point and columns for each feature.
+            The last column must be the label.
         amounts (list): Percent for training/validation/test. If not provided, a 70/20/10 split will be used.
-        split_randomly (bool): True if sample order should be randomized.
 
     Returns:
         tuple: A tuple containing the split training, validation, and test datasets.
     """
-
     if amounts is None:
         amounts = (0.7, 0.2, 0.1)
     total_length = len(data)
