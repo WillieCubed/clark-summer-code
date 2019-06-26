@@ -2,78 +2,64 @@
 
 Includes utility functions for getting validated float and int inputs
 (get_float_input and get_int_input) along with functions for getting a csv
-dataset and splitting it into training, validation, and test sets.
+dataset and splitting it into training, validation, and test sets
+(split_data, get_dataset).
 """
 
 import numpy as np
+import pandas as pd
 
 
-def get_dataset(directory: str, include_feature_labels: bool = True,
-                label_first: bool = False) -> (
-        np.ndarray, np.ndarray, list):
+def get_dataset(directory: str) -> np.ndarray:
     """Get all values in a csv dataset.
 
     Args:
         directory (str): A path to a CSV file
-        include_feature_labels (bool): True if labels for features are the first line of the file
-        label_first (bool): True if the output label is at the beginning of each example, False if it is at the end
+
     Returns:
-        A tuple containing a numpy array for the x, and y values for the
-        dataset along with a list for the labels of the dataset if
-        include_labels was True.
+        np.ndarray: An array containing rows each for features and a label.
     """
-    features_list = np.array([[]])
-    labels = np.array([])
-
-    with open(directory) as f:
-        if include_feature_labels:
-            feature_labels = f.readline().split(',')
-        else:
-            feature_labels = None
-        for example in f.readlines():
-            values = example.split(',')
-            values[-1] = values[-1][:-1]  # Remove the newline because I'm stupid
-            print(values)
-            for value in values:
-                if label_first:
-                    label = int(value[0])
-                    features = float(value[1:])
-                else:
-                    label = int(value[-1])
-                    features = float(value[0:])
-                features_list = np.append(features_list, features)
-                labels = np.append(labels, label)
-    return features_list, labels, feature_labels
+    return pd.read_csv(directory).values
 
 
-def split_data(x: np.ndarray, y: np.ndarray, amounts: tuple = None,
-               split_randomly: bool = False) -> (np.ndarray, np.ndarray, np.ndarray):
+def split_data(data: np.ndarray, amounts: tuple = None) -> (
+        np.ndarray, np.ndarray, np.ndarray):
     """Split a dataset into a training, validation, and test dataset.
 
     Args:
-        x (np.ndarray): Values for the features of a dataset.
-        y (np.ndarray): Values for the labels of a dataset. Must be same size as x.
+        data (np.ndarray): An array containing rows for each data point and columns for each feature. The last column must be the label.
         amounts (list): Percent for training/validation/test. If not provided, a 70/20/10 split will be used.
-        split_randomly (bool): True if sample order should be randomized
+        split_randomly (bool): True if sample order should be randomized.
 
     Returns:
-        A tuple containing the split training, validation, and test datasets.
+        tuple: A tuple containing the split training, validation, and test datasets.
     """
-    # TODO: Find some more efficient way to do this.
+
     if amounts is None:
         amounts = (0.7, 0.2, 0.1)
-    total_length = len(y)
+    total_length = len(data)
+    features = []
+    labels = []
+    for example in data:
+        features.append(example[:-1])
+        labels.append(example[-1])
     train_percent, validation_percent, test_percent = amounts
     validation_lower_bound = int(total_length * train_percent)
     test_lower_bound = validation_lower_bound + int(
         total_length * validation_lower_bound)
-    if split_randomly:
-        group = np.random.rand(list(zip(x, y)))
-    else:
-        group = list(zip(x, y))
-    return group[:validation_lower_bound], \
-           group[validation_lower_bound:test_lower_bound], \
-           group[test_lower_bound:]
+    training = {
+        'x': features[:validation_lower_bound],
+        'y': labels[:validation_lower_bound]
+    }
+    validation = {
+        'x': features[validation_lower_bound:test_lower_bound],
+        'y': labels[validation_lower_bound:test_lower_bound]
+    }
+    test = {
+        'x': features[test_lower_bound:],
+        'y': labels[test_lower_bound:]
+    }
+    return training, validation, test
 
 
 def get_int_input(message: str = 'Input a number:') -> int:
