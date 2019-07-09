@@ -42,6 +42,8 @@ def split_data(data: np.ndarray, amounts: tuple = None) -> (
     for example in data:
         features.append(example[:-1])
         labels.append(example[-1])
+    features = np.array(features)
+    labels = np.array(labels)
     train_percent, validation_percent, test_percent = amounts
     validation_lower_bound = int(total_length * train_percent)
     test_lower_bound = validation_lower_bound + int(

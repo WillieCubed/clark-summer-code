@@ -10,9 +10,11 @@ from common import get_dataset, split_data
 
 DATA_DIRECTORY = 'data/mystery.data'
 
-DEFAULT_STEP_SIZE = 0.01
+DEFAULT_STEP_SIZE = 0.03
 
-DEFAULT_DIFF_THRESHOLD = 0.01  # TODO: Tune hyperparameters
+DEFAULT_DIFF_THRESHOLD = 0.001  # TODO: Tune hyperparameters
+
+NUMBER_OF_EPOCHS = 1000
 
 
 def should_stop_iterating(last_value: float, current_value: float,
@@ -40,7 +42,8 @@ def check_classification(y: int, w: np.ndarray, x: float, b: float) -> bool:
 
     FIXME: Find out why this looks so weird.
     """
-    return y * w * x + b < 0
+    result = y * w.transpose().dot(x) + b < 0
+    return result
 
 
 def determine_stop(last_value: float, current_value: float,
@@ -56,23 +59,8 @@ def determine_stop(last_value: float, current_value: float,
     return abs(last_value - current_value) < threshold
 
 
-def sign(thing: int) -> int:
-    """Performs a sign calculation.
-
-    Returns:
-        int: -1 if the input is negative, 1 if the input is positive,
-        and 0 otherwise.
-    """
-    if thing < 0:
-        return -1
-    elif thing > 0:
-        return 1
-    else:
-        return 0
-
-
-def compute_w(last_weights: np.ndarray, last_bias: np.ndarray,
-              inputs: np.ndarray, alpha: float) -> np.ndarray:
+def compute_new_weights(last_weights: np.ndarray, last_bias: float,
+                        inputs: tuple, alpha: float) -> np.ndarray:
     """Compute the next set of weights given the current input.
 
     A part of gradient descent.
@@ -81,14 +69,17 @@ def compute_w(last_weights: np.ndarray, last_bias: np.ndarray,
         np.ndarray: An array of weights the same size as `last_weights`.
     """
     diff_sum = 0
-    m = len(inputs)
-    for i in range(m):
-        x_m, y_m = inputs[i]
-        diff_sum += y_m * x_m * calculate_i(lambda: check_classification(y=y_m, w=last_weights, x=x_m, b=last_bias))
+    for x, y in zip(inputs[0], inputs[1]):
+        result = y * last_weights.transpose().dot(x) + last_bias
+        i = 0 if result < 0 else 1
+        diff_sum += x * y * i
+        # diff_sum += x * y * calculate_i(
+        #     lambda: check_classification(y=y, w=last_weights, x=x, b=last_bias))
     return last_weights.transpose() + alpha * diff_sum
 
 
-def compute_b(last_biases: np.ndarray, inputs: tuple, alpha: float, last_weights: np.ndarray) -> np.ndarray:
+def compute_new_bias(last_weights: np.ndarray, last_bias: float, inputs: tuple,
+                     alpha: float) -> float:
     """Compute the next set of biases given the current input.
 
     A part of gradient descent.
@@ -97,11 +88,14 @@ def compute_b(last_biases: np.ndarray, inputs: tuple, alpha: float, last_weights
         np.ndarray: An array of weights the same size as `last_biases`.
     """
     diff_sum = 0
-    m = len(inputs)
-    for i in range(m):
-        x_m, y_m = inputs[i]
-        diff_sum += y_m * calculate_i(lambda: check_classification(y=y_m, w=last_weights, x=x_m, b=last_biases))
-    return last_biases + alpha * diff_sum
+    for x, y in zip(inputs[0], inputs[1]):
+        result = y * last_weights.transpose().dot(x) + last_bias
+        i = 0 if result < 0 else 1
+        diff_sum += y * i
+        # diff_sum += y * calculate_i(
+        #     lambda: check_classification(y=y, w=last_weights, x=x, b=last_bias))
+    # print(f'last_bias: {type(last_bias)}, alpha: {type(alpha)}, diff_sum: {type(diff_sum)}')
+    return last_bias + alpha * diff_sum
 
 
 class Perceptron:
@@ -110,38 +104,32 @@ class Perceptron:
     This perceptron can be trained using `train` and make an inference
     using `infer`.
 
-    Training uses gradient descent to
+    Training uses gradient descent.
     """
 
-    def __init__(self, x_array: np.ndarray, y_array: np.ndarray):
-        """Create a perceptron and initialize it with the given data.
-
-        Args:
-            x_array (np.ndarray): Features from the dataset
-            y_array (np.ndarray): Labels from the dataset
-        """
-        self._x = x_array
-        self._y = y_array
-        self.weights = np.zeros((len(y_array), len(x_array)))
-        self.biases = np.zeros((len(y_array), 1))
+    def __init__(self):
+        """Initialize a perceptron with weights of 0 and a bias of 0."""
+        self.weights = None
+        self.bias = 0.
 
     @staticmethod
     def _predict(weights: np.ndarray, x: np.ndarray,
-                 biases: np.ndarray) -> int:
+                 bias: float) -> int:
         """Get the value of this perceptron with the given inputs.
 
         Args:
-            weights (np.ndarray): A 1 x N array of weights
-            x (np.ndarray): An N dimensional array of feature values
-            biases (np.ndarray): A 1 x N array of biases
+            weights (np.ndarray): A 1 x N array of weights.
+            x (np.ndarray): An N dimensional array of feature values.
+            bias (float): A scalar bias.
 
         Returns:
             int: The predicted value (1 or 0).
         """
-        return sign(np.dot(weights.transpose(), x) + biases)
+        print(f'Weights: {weights.dot(x)}, bias: {bias}')
+        return np.sign(weights.transpose().dot(x) + bias)
 
     def _check(self, y_i: int, weights: np.ndarray, x: np.ndarray,
-               biases: np.ndarray) -> bool:
+               bias: float) -> bool:
         """Check if the given example matches this perceptron's prediction.
 
         Args:
@@ -153,21 +141,33 @@ class Perceptron:
         Returns:
             The predicted value (True or False).
         """
-        return self._predict(weights, x, biases) == y_i
+        return self._predict(weights, x, bias) == y_i
 
-    def train(self, alpha=DEFAULT_STEP_SIZE):
+    def train(self, x: np.ndarray, y: np.ndarray, alpha: float = DEFAULT_STEP_SIZE, epochs: int = NUMBER_OF_EPOCHS):
         """Minimize loss by continuously adjusting weights and biases.
 
         This training function performs standard gradient descent to
         minimize the loss function L(w,b).
-        """
-        for x_batch, y_batch in zip(self._x, self._y):
-            new_weights = compute_w(self.weights, self.biases, self._x, alpha)
-            new_biases = compute_b(self.biases, (self._x, self._y), alpha, self.weights)
-            self.weights = new_weights
-            self.biases = new_biases
 
-    def infer(self, x: np.ndarray) -> bool:
+        Args:
+            x (np.ndarray): Features from the dataset.
+            y (np.ndarray): Labels from the dataset.
+            alpha (float): The learning rate, or how serverely weights are altered for each iteration of training data.
+            epochs (int): The number of iterations to train.
+        """
+        len_x = len(x)
+        len_y = len(y)
+        if len_x != len_y:
+            raise ValueError('x should be same length as y.')
+        self.weights = np.zeros((len(x[0])))
+        for _ in range(epochs):
+            inputs = (x, y)
+            new_weights = compute_new_weights(self.weights, self.bias, inputs, alpha)
+            self.weights = new_weights
+            new_bias = compute_new_bias(self.weights, self.bias, inputs, alpha)
+            self.bias = new_bias
+
+    def infer(self, x: np.ndarray) -> int:
         """Perform inference with the given data.
 
         Should be done after calling `train`.
@@ -176,13 +176,15 @@ class Perceptron:
             x (np.ndarray): A vector representing the features of the data.
 
         Returns:
-            bool: The output of this perceptron.
-            True if this perceptron labels the
+            int: The output of this perceptron. (1 indicating True and -1 if false)
         """
-        return True if self._predict(self.weights, x, self.biases) == 1 else False
+        if self.weights is None:
+            raise ValueError('Train must be called before inference.')
+
+        return np.sign(self._predict(self.weights, x, self.bias))
 
 
-def determine_accuracy(perceptron: Perceptron, test_data: tuple) -> float:
+def determine_accuracy(perceptron: Perceptron, test_data: dict) -> float:
     """Determine the accuracy of a perceptron.
 
     Args:
@@ -194,11 +196,21 @@ def determine_accuracy(perceptron: Perceptron, test_data: tuple) -> float:
         amount of examples.
     """
     correct = 0
-    for x, y in test_data:
+    features = test_data['x']
+    labels = test_data['y']
+    total = len(labels)
+    if len(features) != len(labels):
+        raise ValueError('x must be the same length as y.')
+    for i in range(len(features)):
+        x = features[i]
+        y = labels[i]
         inference = perceptron.infer(x)
+        print(f'Does {inference} == {y}?')
         if inference == y:
+            print('Yep!')
             correct += 1
-    return correct / len(test_data)
+        print(f'{correct}/{i}')
+    return correct / total
 
 
 def main():
@@ -207,14 +219,14 @@ def main():
     This takes data at the location defined by DATA_DIRECTORY, splits it into and creates
     a perceptron to predict values.
     """
-    x, y, labels = get_dataset(directory=DATA_DIRECTORY, include_feature_labels=True,
-                               label_first=False)
-    training, validation, test = split_data(x, y)
-    perceptron = Perceptron(training[0], training[1])
+    data = get_dataset(DATA_DIRECTORY)
+    training, validation, test = split_data(data)
+    perceptron = Perceptron()
     # TODO: Use validation set to tune alpha
-    perceptron.train(alpha=DEFAULT_STEP_SIZE)
+    x, y = training['x'], training['y']
+    perceptron.train(x, y, alpha=DEFAULT_STEP_SIZE)
     accuracy = determine_accuracy(perceptron, test)
-    print(f'The perceptron is {accuracy}% accurate. Woo.')
+    print(f'The perceptron is {int(accuracy * 100)}% accurate. Woo.')
 
 
 if __name__ == '__main__':
